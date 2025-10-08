@@ -1,6 +1,5 @@
-import os
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command, StateFilter
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -8,72 +7,15 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemo
 import asyncio
 import logging
 from datetime import datetime
-import gspread
-from google.oauth2.service_account import Credentials
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 BOT_TOKEN = '8066655989:AAEqpJmKgS5uxrrJyYJTcTDAsQGoZZnrJoY'
 ADMIN_CHAT_ID = '5730801538'
-SPREADSHEET_ID = ''
 
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
-
-scope = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
-]
-
-def get_google_sheets_client():
-    try:
-        creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
-        client = gspread.authorize(creds)
-        return client
-    except Exception as e:
-        logging.error(f'Ошибка подключения к Google Sheets: {e}')
-        return None
-
-def save_to_google_sheets(data):
-    try:
-        client = get_google_sheets_client()
-        if not client:
-            return False
-        
-        if SPREADSHEET_ID:
-            sheet = client.open_by_key(SPREADSHEET_ID).sheet1
-        else:
-            sheet = client.open('Заявки на аренду жилья').sheet1
-        
-        row = [
-            datetime.now().strftime('%d.%m.%Y %H:%M'),
-            ', '.join(data['districts']),
-            ', '.join(data['property_type']),
-            data['move_in_date'],
-            data['rental_period'],
-            data['residents'],
-            data['with_children'],
-            data['with_pets'],
-            data['budget'],
-            data['rooms'],
-            data['wishes'],
-            data['contact']
-        ]
-        
-        if sheet.row_count == 0 or sheet.row_values(1) == []:
-            headers = [
-                'Дата/Время', 'Районы', 'Тип жилья', 'Дата заезда', 
-                'Срок аренды', 'Жильцов', 'Дети', 'Питомцы', 
-                'Бюджет', 'Комнат', 'Пожелания', 'Контакт'
-            ]
-            sheet.append_row(headers)
-        
-        sheet.append_row(row)
-        return True
-    except Exception as e:
-        logging.error(f'Ошибка сохранения в Google Sheets: {e}')
-        return False
 
 
 class RentalForm(StatesGroup):
@@ -137,7 +79,7 @@ def make_yes_no_keyboard(yes_text: str, no_text: str):
 
 @dp.message(Command('start'))
 async def cmd_start(message: types.Message, state: FSMContext):
-    logging.info(f'Получена команда /start от пользователя {message.from_user.id}')
+    logging.info(f'🔔 Получена команда /start от {message.from_user.full_name} (ID: {message.from_user.id})')
     await state.clear()
     await message.answer(
         "🏠 <b>Добро пожаловать в бот поиска жилья в Ереване!</b>\n\n"
@@ -380,32 +322,26 @@ async def process_contact(message: types.Message, state: FSMContext):
         f"📞 <b>Контакт:</b> {data['contact']}"
     )
     
-    if ADMIN_CHAT_ID:
-        try:
-            await bot.send_message(ADMIN_CHAT_ID, admin_summary, parse_mode='HTML')
-            logging.info(f'Заявка отправлена в чат {ADMIN_CHAT_ID}')
-        except Exception as e:
-            logging.error(f'Ошибка отправки в админ-чат: {e}')
-    
-    sheets_saved = save_to_google_sheets(data)
-    if sheets_saved:
-        logging.info('Заявка сохранена в Google Sheets')
-    else:
-        logging.warning('Не удалось сохранить заявку в Google Sheets')
+    try:
+        await bot.send_message(ADMIN_CHAT_ID, admin_summary, parse_mode='HTML')
+        logging.info(f'✅ Заявка отправлена админу (chat_id: {ADMIN_CHAT_ID})')
+    except Exception as e:
+        logging.error(f'❌ Ошибка отправки админу: {e}')
     
     await state.clear()
 
 
 async def main():
-    logging.info('🚀 Запуск бота...')
-    logging.info(f'Bot token начинается с: {BOT_TOKEN[:10]}...')
-    logging.info(f'Admin chat ID: {ADMIN_CHAT_ID}')
+    logging.info('🚀 Бот запускается...')
+    logging.info(f'🤖 Bot token: {BOT_TOKEN[:15]}...')
+    logging.info(f'👤 Admin chat ID: {ADMIN_CHAT_ID}')
+    logging.info('✅ Бот готов к работе!')
     try:
         await dp.start_polling(bot, skip_updates=True)
     except Exception as e:
-        logging.error(f'Ошибка при запуске: {e}')
+        logging.error(f'❌ Критическая ошибка: {e}')
 
 
 if __name__ == '__main__':
-    print('🤖 Бот запускается...')
+    print('🤖 Запуск Telegram бота...')
     asyncio.run(main())
