@@ -7,14 +7,73 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 import asyncio
 import logging
+from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
 
 logging.basicConfig(level=logging.INFO)
 
-BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
+BOT_TOKEN = '8066655989:AAEqpJmKgS5uxrrJyYJTcTDAsQGoZZnrJoY'
+ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID', '')
+SPREADSHEET_ID = os.getenv('SPREADSHEET_ID', '')
 
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
+
+scope = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
+
+def get_google_sheets_client():
+    try:
+        creds = Credentials.from_service_account_file('credentials.json', scopes=scope)
+        client = gspread.authorize(creds)
+        return client
+    except Exception as e:
+        logging.error(f'Ошибка подключения к Google Sheets: {e}')
+        return None
+
+def save_to_google_sheets(data):
+    try:
+        client = get_google_sheets_client()
+        if not client:
+            return False
+        
+        if SPREADSHEET_ID:
+            sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        else:
+            sheet = client.open('Заявки на аренду жилья').sheet1
+        
+        row = [
+            datetime.now().strftime('%d.%m.%Y %H:%M'),
+            ', '.join(data['districts']),
+            ', '.join(data['property_type']),
+            data['move_in_date'],
+            data['rental_period'],
+            data['residents'],
+            data['with_children'],
+            data['with_pets'],
+            data['budget'],
+            data['rooms'],
+            data['wishes'],
+            data['contact']
+        ]
+        
+        if sheet.row_count == 0 or sheet.row_values(1) == []:
+            headers = [
+                'Дата/Время', 'Районы', 'Тип жилья', 'Дата заезда', 
+                'Срок аренды', 'Жильцов', 'Дети', 'Питомцы', 
+                'Бюджет', 'Комнат', 'Пожелания', 'Контакт'
+            ]
+            sheet.append_row(headers)
+        
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        logging.error(f'Ошибка сохранения в Google Sheets: {e}')
+        return False
 
 
 class RentalForm(StatesGroup):
@@ -302,10 +361,36 @@ async def process_contact(message: types.Message, state: FSMContext):
     
     await message.answer(summary, parse_mode='HTML')
     
-    # Здесь можно добавить отправку данных админу или в базу данных
-    # Например:
-    # ADMIN_ID = 123456789
-    # await bot.send_message(ADMIN_ID, f"🆕 Новая заявка:\n\n{summary}", parse_mode='HTML')
+    admin_summary = (
+        f"🆕 <b>Новая заявка #{datetime.now().strftime('%Y%m%d-%H%M')}</b>\n\n"
+        f"👤 <b>От пользователя:</b> {message.from_user.full_name}\n"
+        f"🆔 <b>Username:</b> @{message.from_user.username or 'не указан'}\n"
+        f"🆔 <b>User ID:</b> {message.from_user.id}\n\n"
+        f"📍 <b>Районы:</b> {', '.join(data['districts'])}\n"
+        f"🏘 <b>Тип жилья:</b> {', '.join(data['property_type'])}\n"
+        f"📅 <b>Дата заезда:</b> {data['move_in_date']}\n"
+        f"⏱ <b>Срок аренды:</b> {data['rental_period']}\n"
+        f"👥 <b>Жильцов:</b> {data['residents']}\n"
+        f"👶 <b>Дети:</b> {data['with_children']}\n"
+        f"🐾 <b>Питомцы:</b> {data['with_pets']}\n"
+        f"💰 <b>Бюджет:</b> {data['budget']}\n"
+        f"🚪 <b>Комнат:</b> {data['rooms']}\n"
+        f"📝 <b>Пожелания:</b> {data['wishes']}\n"
+        f"📞 <b>Контакт:</b> {data['contact']}"
+    )
+    
+    if ADMIN_CHAT_ID:
+        try:
+            await bot.send_message(ADMIN_CHAT_ID, admin_summary, parse_mode='HTML')
+            logging.info(f'Заявка отправлена в чат {ADMIN_CHAT_ID}')
+        except Exception as e:
+            logging.error(f'Ошибка отправки в админ-чат: {e}')
+    
+    sheets_saved = save_to_google_sheets(data)
+    if sheets_saved:
+        logging.info('Заявка сохранена в Google Sheets')
+    else:
+        logging.warning('Не удалось сохранить заявку в Google Sheets')
     
     await state.clear()
 
