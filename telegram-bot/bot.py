@@ -10,15 +10,12 @@ import logging
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
-from dotenv import load_dotenv
-
-load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
-BOT_TOKEN = os.getenv('BOT_TOKEN', '')
-ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID', '')
-SPREADSHEET_ID = os.getenv('SPREADSHEET_ID', '')
+BOT_TOKEN = '8066655989:AAEqpJmKgS5uxrrJyYJTcTDAsQGoZZnrJoY'
+ADMIN_CHAT_ID = '5730801538'
+SPREADSHEET_ID = ''
 
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
