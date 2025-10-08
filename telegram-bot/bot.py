@@ -137,6 +137,7 @@ def make_yes_no_keyboard(yes_text: str, no_text: str):
 
 @dp.message(Command('start'))
 async def cmd_start(message: types.Message, state: FSMContext):
+    logging.info(f'Получена команда /start от пользователя {message.from_user.id}')
     await state.clear()
     await message.answer(
         "🏠 <b>Добро пожаловать в бот поиска жилья в Ереване!</b>\n\n"
@@ -396,8 +397,15 @@ async def process_contact(message: types.Message, state: FSMContext):
 
 
 async def main():
-    await dp.start_polling(bot)
+    logging.info('🚀 Запуск бота...')
+    logging.info(f'Bot token начинается с: {BOT_TOKEN[:10]}...')
+    logging.info(f'Admin chat ID: {ADMIN_CHAT_ID}')
+    try:
+        await dp.start_polling(bot, skip_updates=True)
+    except Exception as e:
+        logging.error(f'Ошибка при запуске: {e}')
 
 
 if __name__ == '__main__':
+    print('🤖 Бот запускается...')
     asyncio.run(main())
